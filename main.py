@@ -5,6 +5,9 @@ __author__ = 'ShiningZec'
 
 
 def main():
+    app = ui.ClassArrangementApp()
+    app.mainloop()
+
     print(ui.__author__, cli_doc.__author__, sep=', ')
     print("Hello from classarrangement!")
 
