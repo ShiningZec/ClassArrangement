@@ -25,7 +25,7 @@ class Course:
     required: str  # "Compulsory" 或 "Elective"
     prerequisites: List[str]
     offerings: List[Offering]
-    priority: int = field(default=5)  # 优先级,缺省为5
+    priority: int = field(default=9)  # 优先级,缺省为9
 
     def __hash__(self):
         return id.__hash__()
@@ -40,7 +40,7 @@ class CourseScheduler:
         self.all_required = 0
         for entry in data:
             offerings = [Offering(**off) for off in entry.get('offerings', [])]
-            priority = entry.get('priority', 5)  # 默认优先级5
+            priority = entry.get('priority', 9)  # 默认优先级9
             course = Course(id=entry['id'],
                             name=entry['name'],
                             credit=entry['credit'],
@@ -63,7 +63,7 @@ class CourseScheduler:
                          schedule_file: str = SCHEDULE_FILE,
                          enable_required: bool = False,
                          credit_limit_per_sem: int = 5000):
-        """生成满足至少 min_credits 的选课方案（最少学期）,并输出到 schedule.json。"""
+        """生成满足至少 min_credits 的选课方案,并输出到 schedule.json。"""
         completed: Set[str] = set()  # 已修课程ID
         credit_accum = 0  # credit accummulation
         semester_idx = 0  # 学期计数,从0开始,偶数秋季、奇数春季
@@ -77,9 +77,7 @@ class CourseScheduler:
                                  "Compulsory" else 1, c.priority, -c.credit))
 
         while (semester_idx < 8
-               and ((enable_required and sel_required < self.all_required) or
-                    ((len(completed) < course_lower_limit
-                      or credit_accum < min_credits)))):
+               and (not enable_required or sel_required < self.all_required)):
             credit_this_sem = 0
             # 当前学期季节
             current_season = "Autumn" if semester_idx % 2 == 0 else "Spring"
@@ -88,6 +86,9 @@ class CourseScheduler:
 
             # 遍历所有课程,选择满足条件的课程
             for course in sorted_courses:
+                if ((len(taken_id_this_sem) > course_lower_limit
+                     and (credit_this_sem > min_credits // 6))):
+                    break
                 if course.id in completed:
                     continue
                 if course.semester != current_season:
@@ -141,8 +142,8 @@ class CourseScheduler:
             json.dump(schedule, f, ensure_ascii=False, indent=2)
 
     def set_priority(self, course_id: str, priority: int):
-        """设置课程的优先级（缺省为5）。"""
-        if self.get_course(course_id, None) is not None:
+        """设置课程的优先级（缺省为9）。"""
+        if self.courses.get(course_id, None) is not None:
             primal: int = self.courses[course_id].priority
             self.courses[course_id].priority = priority
             self._check_course_priority(self.courses[course_id])
@@ -157,7 +158,7 @@ class CourseScheduler:
     def _check_course_priority(self, course: Course):
         """将先修课的优先级上调"""
         prereqs: List[str] = course.prerequisites
-        priority: int = course.priority
+        priority: int = course.priority - 1 or 1
         for prereq in prereqs:
             if self.courses.get(prereq, None) is None:
                 continue
@@ -172,7 +173,7 @@ class CourseScheduler:
     #     offerings = [
     #         Offering(**off) for off in course_data.get('offerings', [])
     #     ]
-    #     priority = course_data.get('priority', 5)
+    #     priority = course_data.get('priority', 9)
     #     course = Course(id=course_data['id'],
     #                     name=course_data['name'],
     #                     credit=course_data['credit'],
@@ -263,6 +264,7 @@ class ScheduleVisualizer:
             schedules[semester][course_id] = Schedule(
                 course_id, course_info.name, class_id, offering_info.teacher,
                 offering_info.times, offering_info.weeks, course_info.required)
+        self.schedules = schedules[:]
         return schedules
 
     def dump_schedule(self, *, schedule_file: str = SCHEDULE_FILE):
@@ -314,8 +316,12 @@ class ScheduleVisualizer:
         else:
             return 1
 
-        semester_idx: int = max(
-            self.completed.get(prereq, 8) for prereq in course.prerequisites)
+        if course.prerequisites:
+            semester_idx: int = max(
+                self.completed.get(prereq, 8)
+                for prereq in course.prerequisites)
+        else:
+            semester_idx = -1
         while semester_idx < 7:
             semester_idx += 1
             season = "Autumn" if semester_idx % 2 == 0 else "Spring"
@@ -379,13 +385,13 @@ class ScheduleVisualizer:
             return 2
         return 0
 
-    def set_priority(self, priority: int = 5, *, course_id: str = "") -> int:
+    def set_priority(self, priority: int = 9, *, course_id: str = "") -> int:
         """设置/查询优先级
 
         Args:
             priority: non-zero: set to priority;
                       zero: query;
-                      Defaults to 5.
+                      Defaults to 9.
 
         Returns:
             int: primal priority

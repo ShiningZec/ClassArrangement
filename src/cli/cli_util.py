@@ -30,7 +30,7 @@ class Config:
     course_file: str = COURSE_FILE
     schedule_file: str = SCHEDULE_FILE
     forbid_time: List[int] = None
-    course_lower_limit: int = 30
+    course_lower_limit: int = 5
     credit_limit: int = 5000
     enable_required: bool = False
     enable_forbid_time: bool = False
@@ -149,17 +149,17 @@ class CourseSchedulerCli:
                     try:
                         parser = buff.strip().split('-')
                         if len(parser) < 1:
-                            week_idx: int = 0
+                            week_idx: int = 1
                             semester_idx: int = 0
                         elif len(parser) < 2:
-                            week_idx = 0
+                            week_idx = 1
                             semester_idx = int(parser[0]) - 1
                         else:
                             week_idx = int(parser[1]) - 1
                             semester_idx = int(parser[0]) - 1
                         if semester_idx < 0 or semester_idx > 7:
                             semester_idx = 0
-                        if week_idx < 0 or week_idx > 20:
+                        if week_idx < 0 or week_idx >= 20:
                             week_idx = 1
                     except Exception:
                         week_idx = 1
@@ -233,6 +233,7 @@ class CourseSchedulerCli:
                           "not finished prerequired courses")
                 elif status == 0:
                     print("Success.")
+                    modify_counter += 1
                 else:
                     assert False, "Stupid"
             elif choice == '3':
@@ -247,6 +248,7 @@ class CourseSchedulerCli:
                     print("Failing: Bad course_id")
                 elif status == 0:
                     print("Success.")
+                    modify_counter += 1
                 else:
                     assert False, "Stupid"
             elif choice == '4':
@@ -272,6 +274,7 @@ class CourseSchedulerCli:
                           "operation took back")
                 elif status == 0:
                     print("Success.")
+                    modify_counter += 1
                 else:
                     assert False, "Stupid"
             elif choice == '5':
@@ -302,6 +305,7 @@ class CourseSchedulerCli:
                     print(f"Updated: Priority of {course_id} "
                           f"was {primal} and is now set to "
                           f"{priority}")
+                    modify_counter += 1
             elif choice == '0':
                 if modify_counter > 0:
                     self.sv.dump_schedule(schedule_file=schedule_file)
@@ -383,7 +387,7 @@ class CourseSchedulerCli:
                     print(SEP_DOC)
                     continue
                 try:
-                    self.config_set_attribute("class_limit",
+                    self.config_set_attribute("course_lower_limit",
                                               int(buff.strip().split(' ')[0]))
                     print("Successfully changed ClassPerSemLimit "
                           f"to \n{self.config.course_lower_limit}")
@@ -467,6 +471,7 @@ class CourseSchedulerCli:
             self.cs.set_forbidden_times(config.forbid_time)
         else:
             self.cs.set_forbidden_times(DEFAULT_TIMELIST[:])
+        self.sv.dump_schedule(schedule_file=config.schedule_file)
         self.cs.schedule_courses(
             min_credits=min_credit,
             course_lower_limit=config.course_lower_limit,
@@ -478,9 +483,11 @@ class CourseSchedulerCli:
 
     def get_schedule_table(self, semester: int) -> List[List[Schedule]]:
         """will return a schedule table of that semester."""
+        self.sv.load_schedule(schedule_file=self.config.schedule_file)
         return self.sv.get_schedule_table(semester=semester)
 
     def _visual_cli(self, semester: int, weeks: int = 1):
+        self.load_schedule(schedule_file=self.config.schedule_file)
         schedule_table = self.get_schedule_table(semester)
 
         print(SEP_EQUAL)
@@ -522,7 +529,9 @@ class CourseSchedulerCli:
                         print("[\t\t\t\t]", end='')
                         continue
                     teacher = schedule_table[j][i].teacher
-                    if len(teacher) < 5:
+                    if teacher == "王长波教授、孙玉灵":
+                        print(f"[     {teacher}\t]", end='')
+                    elif len(teacher) < 5:
                         print(f"[     {teacher}\t\t\t]", end='')
                     else:
                         print(f"[     {teacher}\t\t]", end='')
